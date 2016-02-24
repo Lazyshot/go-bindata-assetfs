@@ -136,9 +136,21 @@ type AssetFS struct {
 	AssetInfo func(path string) (os.FileInfo, error)
 	// Prefix would be prepended to http requests
 	Prefix string
+	// Fallback file if no file was found
+	Fallback string
 }
 
 func (fs *AssetFS) Open(name string) (http.File, error) {
+	fail := true
+
+	if fs.Fallback != "" {
+		fail = false
+	}
+
+	return fs.internalOpen(name, fail)
+}
+
+func (fs *AssetFS) internalOpen(name string, fail bool) (http.File, error) {
 	name = path.Join(fs.Prefix, name)
 	if len(name) > 0 && name[0] == '/' {
 		name = name[1:]
@@ -153,6 +165,10 @@ func (fs *AssetFS) Open(name string) (http.File, error) {
 	if children, err := fs.AssetDir(name); err == nil {
 		return NewAssetDirectory(name, children, fs), nil
 	} else {
-		return nil, err
+		if fail {
+			return nil, err
+		} else {
+			return fs.internalOpen(fs.Fallback, true)
+		}
 	}
 }
